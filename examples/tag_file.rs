@@ -2,11 +2,10 @@
 
 extern crate oggvorbismeta;
 
+use oggvorbismeta::{read_comment_header, replace_comment_header, CommentHeader, VorbisComments};
 use std::env;
 use std::fs::File;
 use std::io::Cursor;
-use oggvorbismeta::{read_comment_header, replace_comment_header, VorbisComments, CommentHeader};
-
 
 fn main() {
     let file_in = env::args().nth(1).expect("Please specify an input file.");
@@ -19,15 +18,19 @@ fn main() {
 
     println!("Copy input file to buffer");
     std::io::copy(&mut f_in_disk, &mut f_in_ram).unwrap();
-    
+
     let f_in = Cursor::new(&f_in_ram);
     println!("Read comments from file");
     let read_comments = read_comment_header(f_in);
-    
+
     let tag_names = read_comments.get_tag_names();
     println!("Existing tags: {:?}", tag_names);
     for tag in tag_names.iter() {
-        println!("Existing tag: {}, {:?}", tag, read_comments.get_tag_multi(tag));
+        println!(
+            "Existing tag: {}, {:?}",
+            tag,
+            read_comments.get_tag_multi(tag)
+        );
     }
 
     let f_in = Cursor::new(&f_in_ram);

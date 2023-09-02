@@ -1,14 +1,14 @@
 // Read and write vorbiscomment metadata
 
-extern crate lewton;
 extern crate byteorder;
+extern crate lewton;
 extern crate ogg;
 
 //use lewton::header::CommentHeader;
-use ogg::{PacketReader, PacketWriter, Packet};
 use ogg::writing::PacketWriteEndInfo;
-use std::io::{Cursor, Read, Seek};
+use ogg::{Packet, PacketReader, PacketWriter};
 use std::convert::TryInto;
+use std::io::{Cursor, Read, Seek};
 
 pub type CommentHeader = lewton::header::CommentHeader;
 
@@ -16,7 +16,7 @@ pub type CommentHeader = lewton::header::CommentHeader;
 pub trait VorbisComments {
     fn from(vendor: String, comment_list: Vec<(String, String)>) -> CommentHeader;
     fn new() -> CommentHeader;
-    fn get_tag_names(&self) -> Vec<String> ;
+    fn get_tag_names(&self) -> Vec<String>;
     fn get_tag_single(&self, tag: &str) -> Option<String>;
     fn get_tag_multi(&self, tag: &str) -> Vec<String>;
     fn clear_tag(&mut self, tag: &str);
@@ -26,10 +26,8 @@ pub trait VorbisComments {
     fn set_vendor(&mut self, vend: &str);
 }
 
-
 impl VorbisComments for CommentHeader {
-    
-    fn from(vendor: String, comment_list: Vec<(String,String)>) -> CommentHeader {
+    fn from(vendor: String, comment_list: Vec<(String, String)>) -> CommentHeader {
         CommentHeader {
             vendor,
             comment_list,
@@ -38,13 +36,17 @@ impl VorbisComments for CommentHeader {
 
     fn new() -> CommentHeader {
         CommentHeader {
-            vendor : "".to_string(),
-            comment_list : Vec::new(),
+            vendor: "".to_string(),
+            comment_list: Vec::new(),
         }
     }
 
     fn get_tag_names(&self) -> Vec<String> {
-        let mut names = self.comment_list.iter().map(|comment| comment.0.to_lowercase()).collect::<Vec<String>>();
+        let mut names = self
+            .comment_list
+            .iter()
+            .map(|comment| comment.0.to_lowercase())
+            .collect::<Vec<String>>();
         names.sort_unstable();
         names.dedup();
         names
@@ -52,10 +54,9 @@ impl VorbisComments for CommentHeader {
 
     fn get_tag_single(&self, tag: &str) -> Option<String> {
         let tags = self.get_tag_multi(tag);
-        let result = if tags.len()>0 {
+        let result = if tags.len() > 0 {
             Some(tags[0].to_string())
-        }
-        else {
+        } else {
             None
         };
         result
@@ -71,16 +72,19 @@ impl VorbisComments for CommentHeader {
     }
 
     fn clear_tag(&mut self, tag: &str) {
-        self.comment_list.retain(|comment| comment.0.to_lowercase() != tag.to_string().to_lowercase());
+        self.comment_list
+            .retain(|comment| comment.0.to_lowercase() != tag.to_string().to_lowercase());
     }
 
     fn add_tag_single(&mut self, tag: &str, value: &str) {
-        self.comment_list.push((tag.to_string().to_lowercase(), value.to_string()));
+        self.comment_list
+            .push((tag.to_string().to_lowercase(), value.to_string()));
     }
 
     fn add_tag_multi(&mut self, tag: &str, values: &Vec<&str>) {
         for value in values.iter() {
-            self.comment_list.push((tag.to_string().to_lowercase(), value.to_string()));
+            self.comment_list
+                .push((tag.to_string().to_lowercase(), value.to_string()));
         }
     }
 
@@ -91,10 +95,7 @@ impl VorbisComments for CommentHeader {
     fn set_vendor(&mut self, vend: &str) {
         self.vendor = vend.to_string();
     }
-
 }
-
-
 
 pub fn make_comment_header(header: &CommentHeader) -> Vec<u8> {
     //Signature
@@ -123,9 +124,15 @@ pub fn make_comment_header(header: &CommentHeader) -> Vec<u8> {
     let mut commentstrings: Vec<String> = vec![];
     //write each comment
     for comment in header.comment_list.iter() {
-        commentstrings.push(format!("{}={}",comment.0, comment.1));
+        commentstrings.push(format!("{}={}", comment.0, comment.1));
         //let commenstrings.last().as_bytes();
-        let comment_len: u32 = commentstrings.last().unwrap().as_bytes().len().try_into().unwrap();
+        let comment_len: u32 = commentstrings
+            .last()
+            .unwrap()
+            .as_bytes()
+            .len()
+            .try_into()
+            .unwrap();
         new_packet.extend(comment_len.to_le_bytes().iter().cloned());
         new_packet.extend(commentstrings.last().unwrap().as_bytes().iter().cloned());
     }
@@ -135,80 +142,84 @@ pub fn make_comment_header(header: &CommentHeader) -> Vec<u8> {
 }
 
 pub fn read_comment_header<T: Read + Seek>(f_in: T) -> CommentHeader {
-
     let mut reader = PacketReader::new(f_in);
 
-	let packet :Packet = reader.read_packet_expected().unwrap();
+    let packet: Packet = reader.read_packet_expected().unwrap();
     let stream_serial = packet.stream_serial();
 
-	let mut packet: Packet = reader.read_packet_expected().unwrap();
+    let mut packet: Packet = reader.read_packet_expected().unwrap();
     //println!("{:?}",packet.data);
-	while packet.stream_serial() != stream_serial {
-		packet = reader.read_packet_expected().unwrap();
+    while packet.stream_serial() != stream_serial {
+        packet = reader.read_packet_expected().unwrap();
         //println!("{:?}",packet.data);
-	}
+    }
     let comment_hdr = lewton::header::read_header_comment(&packet.data).unwrap();
     //println!("{:?}", comment_hdr);
     comment_hdr
 }
 
-pub fn replace_comment_header<T: Read + Seek>(f_in: T, new_header: CommentHeader) -> Cursor<Vec<u8>> {
-
+pub fn replace_comment_header<T: Read + Seek>(
+    f_in: T,
+    new_header: CommentHeader,
+) -> Cursor<Vec<u8>> {
     let new_comment_data = make_comment_header(&new_header);
 
     let f_out_ram: Vec<u8> = vec![];
     let mut f_out = Cursor::new(f_out_ram);
 
     let mut reader = PacketReader::new(f_in);
-	let mut writer = PacketWriter::new(&mut f_out);
+    let mut writer = PacketWriter::new(&mut f_out);
 
     let mut header_done = false;
-	loop {
-		let rp = reader.read_packet();
+    loop {
+        let rp = reader.read_packet();
         match rp {
             Ok(r) => {
-		        match r {
-			        Some(mut packet) => {
-				        let inf = if packet.last_in_stream() {
-					        PacketWriteEndInfo::EndStream
-				        } else if packet.last_in_page() {
-					        PacketWriteEndInfo::EndPage
-				        } else {
-					        PacketWriteEndInfo::NormalPacket
-				        };
+                match r {
+                    Some(mut packet) => {
+                        let inf = if packet.last_in_stream() {
+                            PacketWriteEndInfo::EndStream
+                        } else if packet.last_in_page() {
+                            PacketWriteEndInfo::EndPage
+                        } else {
+                            PacketWriteEndInfo::NormalPacket
+                        };
                         if !header_done {
                             let comment_hdr = lewton::header::read_header_comment(&packet.data);
                             match comment_hdr {
                                 Ok(_hdr) => {
                                     // This is the packet to replace
                                     packet.data = new_comment_data.clone();
-                                    header_done=true;
-                                },
+                                    header_done = true;
+                                }
                                 Err(_error) => {}
                             }
                         }
                         let lastpacket = packet.last_in_stream() && packet.last_in_page();
-				        let stream_serial = packet.stream_serial();
-				        let absgp_page = packet.absgp_page();
-				        writer.write_packet(packet.data.into_boxed_slice(),
-					        stream_serial,
-					        inf,
-					        absgp_page).unwrap();
+                        let stream_serial = packet.stream_serial();
+                        let absgp_page = packet.absgp_page();
+                        writer
+                            .write_packet(
+                                packet.data.into_boxed_slice(),
+                                stream_serial,
+                                inf,
+                                absgp_page,
+                            )
+                            .unwrap();
                         if lastpacket {
-                            break
+                            break;
                         }
-			        },
-			        // End of stream
-			        None => break,
+                    }
+                    // End of stream
+                    None => break,
                 }
-            },
+            }
             Err(error) => {
                 println!("Error reading packet: {:?}", error);
                 break;
-            },
-		}
-	}
+            }
+        }
+    }
     f_out.seek(std::io::SeekFrom::Start(0)).unwrap();
     f_out
 }
-
