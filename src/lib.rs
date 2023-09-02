@@ -199,12 +199,7 @@ pub fn replace_comment_header<T: Read + Seek>(
                         let stream_serial = packet.stream_serial();
                         let absgp_page = packet.absgp_page();
                         writer
-                            .write_packet(
-                                packet.data.into_boxed_slice(),
-                                stream_serial,
-                                inf,
-                                absgp_page,
-                            )
+                            .write_packet(packet.data, stream_serial, inf, absgp_page)
                             .unwrap();
                         if lastpacket {
                             break;
